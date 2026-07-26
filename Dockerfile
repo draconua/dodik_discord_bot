@@ -1,13 +1,14 @@
-# Use official Node.js 20 LTS Alpine image
-FROM node:20-alpine
+# Use official Node.js 20 LTS Slim (Debian-based) image
+FROM node:20-slim
 
-# Install FFmpeg, Python, and build dependencies required for audio processing and yt-dlp
-RUN apk add --no-cache \
+# Install FFmpeg, Python, build tools, and git required for audio processing and yt-dlp
+RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
     make \
     g++ \
-    git
+    git \
+ && rm -rf /var/lib/apt/lists/*
 
 # Create application working directory
 WORKDIR /app
