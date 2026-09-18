@@ -3,28 +3,34 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 
-const commands = [];
-const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+async function deployCommands() {
+  const commands = [];
+  const commandsPath = path.join(__dirname, 'commands');
 
-for (const file of commandFiles) {
-  const filePath = path.join(commandsPath, file);
-  const command = require(filePath);
-  if ('data' in command && 'execute' in command) {
-    commands.push(command.data.toJSON());
-  } else {
-    console.warn(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+  if (!fs.existsSync(commandsPath)) {
+    console.error('❌ Commands directory not found:', commandsPath);
+    return false;
   }
-}
 
-if (!config.token || !config.clientId) {
-  console.error('❌ Error: DISCORD_TOKEN and CLIENT_ID must be set in your .env file before deploying commands.');
-  process.exit(1);
-}
+  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
-const rest = new REST({ version: '10' }).setToken(config.token);
+  for (const file of commandFiles) {
+    const filePath = path.join(commandsPath, file);
+    const command = require(filePath);
+    if ('data' in command && 'execute' in command) {
+      commands.push(command.data.toJSON());
+    } else {
+      console.warn(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+    }
+  }
 
-(async () => {
+  if (!config.token || !config.clientId) {
+    console.error('❌ Error: DISCORD_TOKEN and CLIENT_ID must be set in your .env file before deploying commands.');
+    return false;
+  }
+
+  const rest = new REST({ version: '10' }).setToken(config.token);
+
   try {
     console.log(`Started refreshing ${commands.length} application (/) commands.`);
 
@@ -44,7 +50,16 @@ const rest = new REST({ version: '10' }).setToken(config.token);
       );
       console.log(`Successfully registered ${data.length} global slash commands.`);
     }
+    return true;
   } catch (error) {
     console.error('❌ Error registering slash commands:', error);
+    return false;
   }
-})();
+}
+
+// Allow running directly
+if (require.main === module) {
+  deployCommands().then((success) => process.exit(success ? 0 : 1));
+}
+
+module.exports = deployCommands;

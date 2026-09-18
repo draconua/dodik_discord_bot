@@ -1,17 +1,25 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { createSuccessEmbed, createErrorEmbed } = require('../utils/embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('shuffle')
-    .setDescription('Shuffle the current queue'),
+    .setDescription('').setDMPermission(false),
 
   async execute(interaction, client) {
     const voiceChannel = interaction.member.voice.channel;
     if (!voiceChannel) {
       return interaction.reply({
         embeds: [createErrorEmbed('You must be in a voice channel to shuffle the queue!')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const botVoice = interaction.guild.members.me.voice.channel;
+    if (botVoice && botVoice.id !== voiceChannel.id) {
+      return interaction.reply({
+        embeds: [createErrorEmbed('You must be in the same voice channel as the bot!')],
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -19,20 +27,22 @@ module.exports = {
     if (!queue || queue.songs.length <= 1) {
       return interaction.reply({
         embeds: [createErrorEmbed('Not enough songs in the queue to shuffle!')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     try {
-      await client.distube.shuffle(interaction.guild);
+      await queue.shuffle();
       return interaction.reply({
         embeds: [createSuccessEmbed('🔀 Queue Shuffled', `Shuffled **${queue.songs.length - 1}** upcoming track(s).`)],
       });
     } catch (error) {
       return interaction.reply({
         embeds: [createErrorEmbed(`Failed to shuffle: ${error.message || error}`)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },
 };
+
+

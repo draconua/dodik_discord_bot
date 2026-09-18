@@ -1,14 +1,14 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { createSuccessEmbed, createErrorEmbed } = require('../utils/embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('volume')
-    .setDescription('Set the playback volume (0 - 100)')
+    .setDescription('').setDMPermission(false)
     .addIntegerOption(option =>
       option
         .setName('amount')
-        .setDescription('Volume level from 0 to 100')
+        .setDescription('').setDMPermission(false)
         .setMinValue(0)
         .setMaxValue(100)
         .setRequired(true)
@@ -19,7 +19,15 @@ module.exports = {
     if (!voiceChannel) {
       return interaction.reply({
         embeds: [createErrorEmbed('You must be in a voice channel to change volume!')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const botVoice = interaction.guild.members.me.voice.channel;
+    if (botVoice && botVoice.id !== voiceChannel.id) {
+      return interaction.reply({
+        embeds: [createErrorEmbed('You must be in the same voice channel as the bot!')],
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -27,22 +35,24 @@ module.exports = {
     if (!queue) {
       return interaction.reply({
         embeds: [createErrorEmbed('There is no queue or song playing!')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     const volume = interaction.options.getInteger('amount');
 
     try {
-      client.distube.setVolume(interaction.guild, volume);
+      queue.setVolume(volume);
       return interaction.reply({
         embeds: [createSuccessEmbed('🔊 Volume Changed', `Set audio volume to **${volume}%**`)],
       });
     } catch (error) {
       return interaction.reply({
         embeds: [createErrorEmbed(`Failed to set volume: ${error.message || error}`)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },
 };
+
+

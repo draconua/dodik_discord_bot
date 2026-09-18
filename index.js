@@ -11,12 +11,11 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 
-// Initialize Discord Client with required Gateway Intents
+// Initialize Discord Client with only strictly required Gateway Intents
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildMessages,
   ],
 });
 
@@ -44,7 +43,7 @@ const distube = new DisTube(client, {
   emitNewSongOnly: true,
   plugins: [
     new SpotifyPlugin(spotifyPluginOptions),
-    new YtDlpPlugin(),
+    new YtDlpPlugin({ update: false }),
   ],
 });
 
@@ -83,24 +82,27 @@ if (fs.existsSync(eventsPath)) {
   }
 }
 
-// Global unhandled promise rejection handler to prevent crashes
+// Global unhandled promise rejection handler to prevent crashes and leaks
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Promise Rejection:', reason);
+  // Optional: exit process on unhandled rejections if stability is paramount
+  // process.exit(1);
 });
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
+  // After an uncaught exception, Node.js is in an undefined state.
+  // Log and exit to avoid silent corruption.
+  process.exit(1);
 });
 
-const sodium = require('libsodium-wrappers');
-
-// Login to Discord after sodium readiness
+// Login to Discord
 if (!config.token) {
   console.error('❌ Error: DISCORD_TOKEN is missing in environment variables or .env file!');
   process.exit(1);
 }
 
-(async () => {
-  await sodium.ready;
-  client.login(config.token);
-})();
+client.login(config.token).catch((error) => {
+  console.error('❌ Failed to login to Discord:', error);
+  process.exit(1);
+});

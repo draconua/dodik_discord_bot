@@ -23,7 +23,7 @@ function formatDuration(seconds) {
  * Creates a text-based progress bar.
  * @param {number} current - Current position in seconds
  * @param {number} total - Total duration in seconds
- * @param {number} barSize - Length of the progress bar line
+ * @param {number} barSize - Length of the progress bar line (total characters excluding slider)
  * @param {string} line - Character for unfulfilled progress
  * @param {string} slider - Character for current head position
  * @returns {string}
@@ -34,10 +34,10 @@ function createProgressBar(current, total, barSize = 15, line = '▬', slider = 
   }
 
   const progress = Math.min(Math.max(current / total, 0), 1);
-  const sliderPosition = Math.round(progress * barSize);
+  const sliderPosition = Math.round(progress * (barSize - 1));
 
   const left = line.repeat(Math.max(0, sliderPosition));
-  const right = line.repeat(Math.max(0, barSize - sliderPosition));
+  const right = line.repeat(Math.max(0, barSize - 1 - sliderPosition));
 
   const currentTimeStr = formatDuration(current);
   const totalTimeStr = formatDuration(total);

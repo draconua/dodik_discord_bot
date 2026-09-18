@@ -1,10 +1,10 @@
-const { ActivityType } = require('discord.js');
+const { ActivityType, Events } = require('discord.js');
 const { generateDependencyReport } = require('@discordjs/voice');
 
 module.exports = {
-  name: 'clientReady',
+  name: Events.ClientReady,
   once: true,
-  execute(client) {
+  async execute(client) {
     console.log(`=================================`);
     console.log(`🤖 Logged in as ${client.user.tag}`);
     console.log(`🌐 Ready on ${client.guilds.cache.size} server(s)`);

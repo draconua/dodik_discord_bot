@@ -1,17 +1,25 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { createSuccessEmbed, createErrorEmbed } = require('../utils/embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('stop')
-    .setDescription('Stop playing, clear the queue, and leave the voice channel'),
+    .setDescription('').setDMPermission(false),
 
   async execute(interaction, client) {
     const voiceChannel = interaction.member.voice.channel;
     if (!voiceChannel) {
       return interaction.reply({
         embeds: [createErrorEmbed('You must be in a voice channel to stop music!')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const botVoice = interaction.guild.members.me.voice.channel;
+    if (botVoice && botVoice.id !== voiceChannel.id) {
+      return interaction.reply({
+        embeds: [createErrorEmbed('You must be in the same voice channel as the bot!')],
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -19,13 +27,13 @@ module.exports = {
     if (!queue) {
       return interaction.reply({
         embeds: [createErrorEmbed('There is no active music player!')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     try {
-      await client.distube.stop(interaction.guild);
-      await client.distube.voices.leave(interaction.guild);
+      await queue.stop();
+      await client.distube.voices.leave(interaction.guild).catch(() => {});
 
       return interaction.reply({
         embeds: [createSuccessEmbed('⏹️ Stopped', 'Stopped music playback, cleared queue, and left the voice channel.')],
@@ -33,8 +41,10 @@ module.exports = {
     } catch (error) {
       return interaction.reply({
         embeds: [createErrorEmbed(`Failed to stop player: ${error.message || error}`)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },
 };
+
+

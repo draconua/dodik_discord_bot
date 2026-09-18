@@ -1,15 +1,15 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { createSuccessEmbed, createErrorEmbed } = require('../utils/embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('remove')
-    .setDescription('Remove a specific track from the queue')
+    .setDescription('').setDMPermission(false)
     .addIntegerOption(option =>
       option
         .setName('position')
-        .setDescription('Track position in queue (1 = currently playing, 2 = next song, etc.)')
-        .setMinValue(1)
+        .setDescription('').setDMPermission(false)
+        .setMinValue(2)
         .setRequired(true)
     ),
 
@@ -18,7 +18,15 @@ module.exports = {
     if (!voiceChannel) {
       return interaction.reply({
         embeds: [createErrorEmbed('You must be in a voice channel to remove songs!')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const botVoice = interaction.guild.members.me.voice.channel;
+    if (botVoice && botVoice.id !== voiceChannel.id) {
+      return interaction.reply({
+        embeds: [createErrorEmbed('You must be in the same voice channel as the bot!')],
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -26,27 +34,18 @@ module.exports = {
     if (!queue || !queue.songs || queue.songs.length === 0) {
       return interaction.reply({
         embeds: [createErrorEmbed('The queue is currently empty!')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     const position = interaction.options.getInteger('position');
 
-    if (position === 1) {
-      return interaction.reply({
-        embeds: [
-          createErrorEmbed('Position 1 is the currently playing song! Use `/skip` if you want to skip it.'),
-        ],
-        ephemeral: true,
-      });
-    }
-
     if (position > queue.songs.length) {
       return interaction.reply({
         embeds: [
-          createErrorEmbed(`Invalid position! Queue currently has **${queue.songs.length}** songs.`),
+          createErrorEmbed(`Invalid position! Queue currently has **${queue.songs.length}** tracks (including the current song).`),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -63,8 +62,10 @@ module.exports = {
     } catch (error) {
       return interaction.reply({
         embeds: [createErrorEmbed(`Failed to remove track: ${error.message || error}`)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },
 };
+
+

@@ -1,11 +1,18 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { createErrorEmbed } = require('../utils/embeds');
 const config = require('../config');
+
+// Helper to escape markdown brackets in titles
+function escapeMarkdown(text) {
+  if (!text) return 'Unknown';
+  return text.replace(/\[/g, '\\[').replace(/\]/g, '\\]');
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('queue')
     .setDescription('Display the current music queue')
+    .setDMPermission(false)
     .addIntegerOption(option =>
       option
         .setName('page')
@@ -13,49 +20,64 @@ module.exports = {
         .setMinValue(1)
     ),
 
-  async execute(interaction, client) {
-    const queue = client.distube.getQueue(interaction.guild);
+  async execute(interaction) {
+    const queue = interaction.client.distube.getQueue(interaction.guild);
     if (!queue || !queue.songs || queue.songs.length === 0) {
       return interaction.reply({
         embeds: [createErrorEmbed('The queue is currently empty!')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
-    const currentSong = queue.songs[0];
-    const upcomingSongs = queue.songs.slice(1);
+    try {
+      const currentSong = queue.songs[0];
+      const itemsPerPage = 10;
+      const upcomingCount = queue.songs.length - 1;
+      const totalPages = Math.ceil(upcomingCount / itemsPerPage) || 1;
+      const page = Math.min(interaction.options.getInteger('page') || 1, totalPages);
 
-    const itemsPerPage = 10;
-    const totalPages = Math.ceil(upcomingSongs.length / itemsPerPage) || 1;
-    const page = Math.min(interaction.options.getInteger('page') || 1, totalPages);
+      const startIdx = (page - 1) * itemsPerPage;
+      const endIdx = startIdx + itemsPerPage;
+      // Fetch directly without duplicating the array
+      const pageSongs = queue.songs.slice(startIdx + 1, endIdx + 1);
 
-    const startIdx = (page - 1) * itemsPerPage;
-    const endIdx = startIdx + itemsPerPage;
-    const pageSongs = upcomingSongs.slice(startIdx, endIdx);
+      const currentName = escapeMarkdown(currentSong.name);
+      let queueString = `**Now Playing:**\n🎶 [${currentName}](${currentSong.url}) - \`${currentSong.formattedDuration}\` | Req: ${currentSong.user?.toString() || 'Unknown'}\n\n`;
 
-    let queueString = `**Now Playing:**\n🎶 [${currentSong.name}](${currentSong.url}) - \`${currentSong.formattedDuration}\` | Req: ${currentSong.user}\n\n`;
+      if (pageSongs.length > 0) {
+        queueString += '**Up Next:**\n';
+        for (let i = 0; i < pageSongs.length; i++) {
+          const song = pageSongs[i];
+          const songName = escapeMarkdown(song.name);
+          const trackString = `\`${startIdx + i + 1}.\` [${songName}](${song.url}) - \`${song.formattedDuration}\` | Req: ${song.user?.toString() || 'Unknown'}\n`;
+          
+          // Stop adding tracks if it exceeds the Discord 4096 char limit
+          if (queueString.length + trackString.length > 4000) {
+            queueString += `*...and ${pageSongs.length - i} more tracks on this page.*`;
+            break;
+          }
+          queueString += trackString;
+        }
+      } else if (upcomingCount === 0) {
+        queueString += '*No more songs in queue.*';
+      }
 
-    if (pageSongs.length > 0) {
-      queueString += '**Up Next:**\n';
-      queueString += pageSongs
-        .map(
-          (song, index) =>
-            `\`${startIdx + index + 1}.\` [${song.name}](${song.url}) - \`${song.formattedDuration}\` | Req: ${song.user}`
-        )
-        .join('\n');
-    } else if (upcomingSongs.length === 0) {
-      queueString += '*No more songs in queue.*';
+      const embed = new EmbedBuilder()
+        .setColor(config.bot.embedColor)
+        .setTitle(`🎵 Server Queue (${queue.songs.length} track${queue.songs.length === 1 ? '' : 's'})`)
+        .setDescription(queueString)
+        .setFooter({
+          text: `Page ${page} of ${totalPages} • Total Duration: ${queue.formattedDuration}`,
+        })
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [embed] });
+    } catch (error) {
+      console.error('Queue command error:', error);
+      return interaction.reply({
+        embeds: [createErrorEmbed(`Failed to display queue: ${error.message || error}`)],
+        flags: MessageFlags.Ephemeral,
+      });
     }
-
-    const embed = new EmbedBuilder()
-      .setColor(config.bot.embedColor)
-      .setTitle(`🎵 Server Queue (${queue.songs.length} track${queue.songs.length === 1 ? '' : 's'})`)
-      .setDescription(queueString)
-      .setFooter({
-        text: `Page ${page} of ${totalPages} • Total Duration: ${queue.formattedDuration}`,
-      })
-      .setTimestamp();
-
-    return interaction.reply({ embeds: [embed] });
   },
 };

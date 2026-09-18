@@ -19,7 +19,8 @@ function clearIdleTimer(guildId) {
 
 function startIdleTimer(distube, guildId, reasonMessage, textChannel) {
   clearIdleTimer(guildId);
-  const timeoutMs = (config.bot.idleTimeoutMinutes || 5) * 60 * 1000;
+  const timeoutMinutes = config.bot.idleTimeoutMinutes || 5;
+  const timeoutMs = timeoutMinutes * 60 * 1000;
 
   const timer = setTimeout(() => {
     const queue = distube.getQueue(guildId);
@@ -41,37 +42,47 @@ function startIdleTimer(distube, guildId, reasonMessage, textChannel) {
 
 module.exports = (distube) => {
   distube.on('playSong', (queue, song) => {
-    clearIdleTimer(queue.guildId);
+    clearIdleTimer(queue.id);
     if (queue.textChannel) {
       queue.textChannel
         .send({ embeds: [createPlaySongEmbed(song)] })
-        .catch(err => console.error('Error sending playSong embed:', err));
+        .catch(err => {
+          console.error('Error sending playSong embed:', err);
+          if (err.code === 10003) queue.textChannel = null; // Unknown Channel
+        });
     }
   });
 
   distube.on('addSong', (queue, song) => {
-    clearIdleTimer(queue.guildId);
+    clearIdleTimer(queue.id);
     if (queue.songs.length > 1 && queue.textChannel) {
       queue.textChannel
         .send({ embeds: [createAddSongEmbed(song, queue)] })
-        .catch(err => console.error('Error sending addSong embed:', err));
+        .catch(err => {
+          console.error('Error sending addSong embed:', err);
+          if (err.code === 10003) queue.textChannel = null;
+        });
     }
   });
 
   distube.on('addList', (queue, playlist) => {
-    clearIdleTimer(queue.guildId);
+    clearIdleTimer(queue.id);
     if (queue.textChannel) {
       queue.textChannel
         .send({ embeds: [createAddListEmbed(playlist, queue)] })
-        .catch(err => console.error('Error sending addList embed:', err));
+        .catch(err => {
+          console.error('Error sending addList embed:', err);
+          if (err.code === 10003) queue.textChannel = null;
+        });
     }
   });
 
   distube.on('empty', (queue) => {
+    const timeoutMinutes = config.bot.idleTimeoutMinutes || 5;
     startIdleTimer(
       distube,
-      queue.guildId,
-      'Disconnected after 5 minutes of inactivity in an empty voice channel.',
+      queue.id,
+      `Disconnected after ${timeoutMinutes} minutes of inactivity in an empty voice channel.`,
       queue.textChannel
     );
   });
@@ -87,23 +98,37 @@ module.exports = (distube) => {
             ),
           ],
         })
-        .catch(err => console.error('Error sending finish embed:', err));
+        .catch(err => {
+          console.error('Error sending finish embed:', err);
+          if (err.code === 10003) queue.textChannel = null;
+        });
     }
 
+    const timeoutMinutes = config.bot.idleTimeoutMinutes || 5;
     startIdleTimer(
       distube,
-      queue.guildId,
-      'Disconnected after 5 minutes of inactivity.',
+      queue.id,
+      `Disconnected after ${timeoutMinutes} minutes of inactivity.`,
       queue.textChannel
     );
   });
+  
+  distube.on('disconnect', (queue) => {
+    // If the bot leaves the channel (manually or kicked), clear any running idle timers.
+    clearIdleTimer(queue.id);
+  });
 
-  distube.on('error', (channel, error) => {
+  // DisTube v5 error event signature: (error, queue, song)
+  distube.on('error', (error, queue) => {
     console.error('DisTube Player Error:', error);
     const errorMessage = error?.message || 'An unknown audio extraction error occurred.';
 
-    if (channel && typeof channel.send === 'function') {
-      channel
+    // Queue might be a TextChannel if error happens before queue init in older versions,
+    // but in v5 it's typed properly. We fallback to queue itself if it has a send method.
+    const textChannel = queue?.textChannel || (typeof queue?.send === 'function' ? queue : null);
+    
+    if (textChannel && typeof textChannel.send === 'function') {
+      textChannel
         .send({
           embeds: [
             createErrorEmbed(
@@ -111,7 +136,12 @@ module.exports = (distube) => {
             ),
           ],
         })
-        .catch(err => console.error('Error sending distube error embed:', err));
+        .catch(err => {
+          console.error('Error sending distube error embed:', err);
+          if (err.code === 10003 && queue && typeof queue === 'object' && 'textChannel' in queue) {
+             queue.textChannel = null;
+          }
+        });
     }
   });
 };

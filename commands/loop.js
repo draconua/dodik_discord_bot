@@ -1,14 +1,15 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { RepeatMode } = require('distube');
 const { createSuccessEmbed, createErrorEmbed } = require('../utils/embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('loop')
-    .setDescription('Set the loop repeat mode')
+    .setDescription('').setDMPermission(false)
     .addStringOption(option =>
       option
         .setName('mode')
-        .setDescription('Loop mode to set')
+        .setDescription('').setDMPermission(false)
         .setRequired(true)
         .addChoices(
           { name: 'Off', value: 'off' },
@@ -22,7 +23,15 @@ module.exports = {
     if (!voiceChannel) {
       return interaction.reply({
         embeds: [createErrorEmbed('You must be in a voice channel to set loop mode!')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const botVoice = interaction.guild.members.me.voice.channel;
+    if (botVoice && botVoice.id !== voiceChannel.id) {
+      return interaction.reply({
+        embeds: [createErrorEmbed('You must be in the same voice channel as the bot!')],
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -30,35 +39,41 @@ module.exports = {
     if (!queue) {
       return interaction.reply({
         embeds: [createErrorEmbed('There is no queue or song playing!')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     const modeChoice = interaction.options.getString('mode');
-    let modeValue = 0;
-    let modeText = 'Off';
+    let modeValue;
+    let modeText;
 
-    if (modeChoice === 'track') {
-      modeValue = 1;
-      modeText = 'Current Track 🔂';
-    } else if (modeChoice === 'queue') {
-      modeValue = 2;
-      modeText = 'Entire Queue 🔁';
-    } else {
-      modeValue = 0;
-      modeText = 'Off ➡️';
+    switch (modeChoice) {
+      case 'track':
+        modeValue = RepeatMode.SONG;
+        modeText = 'Current Track 🔂';
+        break;
+      case 'queue':
+        modeValue = RepeatMode.QUEUE;
+        modeText = 'Entire Queue 🔁';
+        break;
+      default:
+        modeValue = RepeatMode.DISABLED;
+        modeText = 'Off ➡️';
+        break;
     }
 
     try {
-      client.distube.setRepeatMode(interaction.guild, modeValue);
+      queue.setRepeatMode(modeValue);
       return interaction.reply({
         embeds: [createSuccessEmbed('🔄 Loop Mode Set', `Loop mode is now set to: **${modeText}**`)],
       });
     } catch (error) {
       return interaction.reply({
         embeds: [createErrorEmbed(`Failed to set loop mode: ${error.message || error}`)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },
 };
+
+
